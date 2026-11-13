@@ -2,7 +2,7 @@
 
 [日本語](README.ja.md)
 
-A Rust library with a CLI (clap) and an MCP server (rmcp), localized with [lingokit]({{lingokit_git}}).
+A Rust library with a CLI (clap) and an MCP server (rmcp), localized with [lingokit](https://github.com/lovelygenerator/lingokit).
 
 ## Layout
 

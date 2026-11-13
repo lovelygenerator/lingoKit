@@ -7,7 +7,6 @@ ignore = ["target", "hooks", "private"]
 [placeholders]
 with_cli = { type = "bool", prompt = "Generate the CLI crate (clap)?", default = true }
 with_mcp = { type = "bool", prompt = "Generate the MCP server crate (rmcp)?", default = true }
-lingokit_git = { type = "string", prompt = "Git repository of lingokit", default = "https://github.com/lovelygenerator/lingokit" }
 
 [hooks]
 # Sets the default env_prefix (crate_name in upper case). Override with -d env_prefix=FOO.

@@ -2,7 +2,7 @@
 
 [English](README.md)
 
-Rust ライブラリ + CLI(clap)+ MCP サーバー(rmcp)。多言語対応には [lingokit]({{lingokit_git}}) を使います。
+Rust ライブラリ + CLI(clap)+ MCP サーバー(rmcp)。多言語対応には [lingokit](https://github.com/lovelygenerator/lingokit) を使います。
 
 ## 構成
 

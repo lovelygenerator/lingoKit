@@ -10,8 +10,8 @@ rust-version = "1.88"
 [workspace.dependencies]
 core_lib = { package = "{{project-name}}-core", path = "crates/core" }
 
-lingokit = { git = "{{lingokit_git}}" }
-lingokit-build = { git = "{{lingokit_git}}" }
+lingokit = "0.1.0"
+lingokit-build = "0.1.0"
 
 clap = { version = "4.6", features = ["derive"] }
 rmcp = { version = "~3.10", features = ["server", "macros", "transport-io"] }
