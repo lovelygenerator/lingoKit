@@ -37,11 +37,19 @@
 //!     NotFound { path: std::path::PathBuf },
 //! }
 //!
-//! // CLI (feature `clap`)
-//! let (cli, loc) = lingokit::clap::parse::<Cli>(&LOCALES);
+//! // CLI (feature `clap`): main.rs
+//! fn main() -> std::process::ExitCode {
+//!     let (cli, loc) = lingokit::clap::parse::<Cli>(&LOCALES);
+//!     lingokit::clap::exit_code(&loc, run(cli, &loc))
+//! }
 //!
 //! // MCP server (feature `rmcp`)
-//! let router = lingokit::rmcp::localize_if_enabled(Self::tool_router(), &loc);
+//! impl Server {
+//!     fn new(loc: lingokit::Localizer) -> Self {
+//!         let tool_router = lingokit::rmcp::localize_if_enabled(Self::tool_router(), &loc);
+//!         Self { loc, tool_router }
+//!     }
+//! }
 //! ```
 //!
 //! # Locale
