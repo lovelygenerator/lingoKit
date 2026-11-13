@@ -1,0 +1,25 @@
+[package]
+name = "lingokit"
+description = "Localize clap CLIs and rmcp MCP servers with Fluent: one set of .ftl files for help, errors, tool descriptions and messages"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["derive"]
+derive = ["dep:lingokit-macros"]
+clap = ["dep:clap"]
+rmcp = ["dep:rmcp", "dep:serde_json"]
+
+[dependencies]
+fluent-bundle.workspace = true
+fluent-langneg.workspace = true
+unic-langid.workspace = true
+lingokit-macros = { workspace = true, optional = true }
+clap = { workspace = true, optional = true }
+rmcp = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }

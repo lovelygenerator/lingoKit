@@ -1,0 +1,13 @@
+err-not-found = 見つかりません: { $path }
+    .hint = パスを確認してください。
+err-too-many = 多すぎます: { $count } 件
+err-io = 入出力エラー
+err-empty = 空です
+cli-about = デモ CLI
+cli-count-about = 単語を数える
+cli-count-arg-path = パス
+cli-count-arg-format = 形式
+cli-count-arg-format-value-text = テキスト
+cli-count-arg-format-value-json = JSON
+mcp-tool-count_words = 単語を数える
+mcp-tool-count_words-param-path = パス

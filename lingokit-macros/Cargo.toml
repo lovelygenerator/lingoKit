@@ -1,0 +1,18 @@
+[package]
+name = "lingokit-macros"
+description = "derive(LocalizedError) for lingokit (i18n for clap CLIs and rmcp MCP servers)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true

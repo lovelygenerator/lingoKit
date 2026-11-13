@@ -1,0 +1,14 @@
+[package]
+name = "lingokit-build"
+description = "build.rs helper for lingokit (i18n for clap CLIs and rmcp MCP servers): validates FTL files and generates typed accessors"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+fluent-syntax.workspace = true
+ftl-check.workspace = true

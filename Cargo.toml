@@ -1,0 +1,29 @@
+[workspace]
+resolver = "3"
+members = ["lingokit", "lingokit-build", "lingokit-macros", "tests/demo"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.88"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/lovelygenerator/lingokit"
+keywords = ["i18n", "cli", "mcp", "clap", "fluent"]
+categories = ["internationalization", "command-line-interface"]
+
+[workspace.dependencies]
+lingokit-macros = { path = "lingokit-macros", version = "0.1.0" }
+fluent-bundle = "0.16"
+fluent-syntax = "0.12"
+# FTL のチェック(ライブラリ API は 0.x の間不安定なため完全一致で固定)
+ftl-check = "=0.1.0"
+# fluent-bundle 0.16 と同じ unic-langid 系(0.14 は icu_locid 系で型が合わない)
+fluent-langneg = "0.13"
+unic-langid = "0.9"
+clap = { version = "4.6", features = ["string"] }
+# ToolRouter.map(pub)に依存するため minor まで固定する
+rmcp = { version = "~3.10", default-features = false, features = ["server"] }
+serde_json = "1"
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"

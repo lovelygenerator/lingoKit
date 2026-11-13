@@ -1,0 +1,2 @@
+path = "locales/{locale}/**/*.ftl"
+base = "en"
