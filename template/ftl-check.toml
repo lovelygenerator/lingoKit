@@ -1,0 +1,8 @@
+# ftl-check の設定(https://github.com/lovelygenerator/ftl-check)
+# ビルド時に lingokit-build がこの設定で FTL を検査する。CLI の `ftl-check` でも同じ結果になる。
+path = "locales/{locale}/**/*.ftl"
+base = "en"
+
+# 例: 訳が英語と同じでも正しいキーを、未翻訳の警告(W502)から外す
+# [allow]
+# untranslated = ["cli-*-value-json"]

@@ -1,0 +1,18 @@
+[package]
+name = "{{project-name}}-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "cli"
+
+[[bin]]
+name = "{{project-name}}"
+path = "src/main.rs"
+
+[dependencies]
+core_lib.workspace = true
+lingokit = { workspace = true, features = ["clap"] }
+clap.workspace = true
+serde_json.workspace = true

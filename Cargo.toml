@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["lingokit", "lingokit-build", "lingokit-macros", "tests/demo"]
+# cargo-generate のテンプレート(プレースホルダーを含むためビルド対象外)
+exclude = ["template"]
 
 [workspace.package]
 version = "0.1.0"

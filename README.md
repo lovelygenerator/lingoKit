@@ -10,6 +10,15 @@
 | `lingokit-build` | build.rs 用。FTL の検証と型付きアクセサの生成 |
 | `lingokit-macros` | `#[derive(LocalizedError)]` |
 
+## テンプレートから始める
+
+ライブラリ本体・CLI・MCP サーバーのワークスペースを [cargo-generate](https://github.com/cargo-generate/cargo-generate) で作れます(`template/`)。
+
+```sh
+cargo generate gh:lovelygenerator/lingokit template --name my-tool
+# CLI や MCP が不要なら -d with_cli=false / -d with_mcp=false
+```
+
 ## 導入
 
 ```toml

@@ -1,0 +1,15 @@
+[package]
+name = "{{project-name}}-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "core_lib"
+
+[dependencies]
+lingokit.workspace = true
+thiserror.workspace = true
+
+[build-dependencies]
+lingokit-build.workspace = true
