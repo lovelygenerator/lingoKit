@@ -8,6 +8,7 @@ license.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
+readme = "README.md"
 
 [features]
 default = ["derive"]
@@ -23,3 +24,6 @@ lingokit-macros = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 rmcp = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+
+[package.metadata.docs.rs]
+all-features = true

@@ -9,17 +9,22 @@
 //! }
 //! ```
 //!
-//! - 名前付きフィールドが同名の Fluent 引数(`$path`)として渡される
-//! - `#[source]` / `#[from]` / `#[backtrace]` / `#[ftl(skip)]` のフィールドと、`source` という名前のフィールドは渡さない
-//! - キーの存在と、メッセージが使う変数がフィールドにあることをコンパイル時に検査する
-//!   (クレートのルートで `lingokit::include_locales!()` していることが前提。
-//!   別の場所なら型に `#[ftl(msg = path::to::msg)]` を付ける)
+//! - Named fields are passed as Fluent variables of the same name (`$path`).
+//! - Fields marked `#[source]`, `#[from]`, `#[backtrace]` or `#[ftl(skip)]`, and fields named
+//!   `source` or `backtrace`, are not passed.
+//! - Numbers stay numbers (for plural selection), paths use `display()`, other types `Display`.
+//! - It is a compile error when the key is not in the FTL files, or when the message uses a
+//!   variable that is not a field. This needs `lingokit::include_locales!()` at the crate root;
+//!   elsewhere, add `#[ftl(msg = path::to::msg)]` to the type.
+//!
+//! Re-exported as `lingokit::LocalizedError`; use it through the `lingokit` crate.
 
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
 use quote::{format_ident, quote, quote_spanned};
 use syn::{Attribute, Data, DeriveInput, Fields, LitStr, Path, parse_macro_input};
 
+/// Derives `lingokit::LocalizedError`. See the [crate] documentation.
 #[proc_macro_derive(LocalizedError, attributes(ftl))]
 pub fn derive_localized_error(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -49,7 +54,7 @@ fn parse_ftl(attrs: &[Attribute]) -> syn::Result<FtlAttr> {
             } else if meta.path.is_ident("key") {
                 out.key = Some(meta.value()?.parse()?);
             } else {
-                return Err(meta.error("未知の ftl 属性です(使えるのは \"key\" / key = / msg = / skip)"));
+                return Err(meta.error("unknown ftl attribute (expected \"key\", key = ..., msg = ... or skip)"));
             }
             Ok(())
         })?;
@@ -64,7 +69,7 @@ const KEYWORDS: &[&str] = &[
     "override", "priv", "typeof", "unsized", "virtual", "yield", "try", "gen",
 ];
 
-/// lingokit-build と同じ規則でキーを識別子にする
+/// Key → identifier, with the same rule as lingokit-build
 fn key_ident(key: &LitStr) -> syn::Ident {
     let s = key.value().replace(['-', '.'], "_");
     if KEYWORDS.contains(&s.as_str()) { format_ident!("r#{}", s, span = key.span()) } else { syn::Ident::new(&s, key.span()) }
@@ -78,7 +83,7 @@ fn is_skipped(field: &syn::Field) -> syn::Result<bool> {
     Ok(thiserror_attr || named_source || parse_ftl(&field.attrs)?.skip)
 }
 
-/// 1つのバリアント(または構造体)分の (パターン, 本体) を作る
+/// (pattern, body) of one variant or struct
 fn arm(fields: &Fields, key: &LitStr, msg: &TokenStream2) -> syn::Result<(TokenStream2, TokenStream2)> {
     let ident = key_ident(key);
     let mut names = Vec::new();
@@ -95,7 +100,7 @@ fn arm(fields: &Fields, key: &LitStr, msg: &TokenStream2) -> syn::Result<(TokenS
         Fields::Unit => quote!(),
     };
     let name_strs: Vec<String> = names.iter().map(|n| n.to_string()).collect();
-    // エラー位置が #[ftl("...")] を指すようにする
+    // Point errors at #[ftl("...")]
     let check = quote_spanned! {key.span()=>
         const _: () = ::lingokit::__private::assert_vars(#msg::__vars::#ident, &[#(#name_strs),*]);
     };
@@ -126,7 +131,7 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             let mut arms = Vec::new();
             for v in &e.variants {
                 let key = parse_ftl(&v.attrs)?.key.ok_or_else(|| {
-                    syn::Error::new_spanned(&v.ident, "各バリアントに #[ftl(\"キー\")] を付けてください")
+                    syn::Error::new_spanned(&v.ident, "add #[ftl(\"key\")] to every variant")
                 })?;
                 let (pat, body) = arm(&v.fields, &key, &msg)?;
                 let vi = &v.ident;
@@ -138,11 +143,11 @@ fn expand(input: DeriveInput) -> syn::Result<TokenStream2> {
             let key = top
                 .key
                 .clone()
-                .ok_or_else(|| syn::Error::new_spanned(name, "構造体に #[ftl(\"キー\")] を付けてください"))?;
+                .ok_or_else(|| syn::Error::new_spanned(name, "add #[ftl(\"key\")] to the struct"))?;
             let (pat, body) = arm(&s.fields, &key, &msg)?;
             quote!({ let Self #pat = self; #body })
         }
-        Data::Union(_) => return Err(syn::Error::new_spanned(name, "union には使えません")),
+        Data::Union(_) => return Err(syn::Error::new_spanned(name, "unions are not supported")),
     };
 
     Ok(quote! {

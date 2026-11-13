@@ -1,11 +1,11 @@
-//! ロケール解決。
+//! Choosing the display locale.
 
 use std::ffi::OsString;
 
 use unic_langid::LanguageIdentifier;
 
-/// 優先度順の要求言語リストを返す。
-/// 優先順位: `cli_lang` → `<prefix>_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG`
+/// The requested locale: the first valid value of `cli_lang`, `<env_prefix>_LANG`, `LC_ALL`,
+/// `LC_MESSAGES` and `LANG`. Empty when none is set.
 pub fn resolve(env_prefix: &str, cli_lang: Option<&str>) -> Vec<LanguageIdentifier> {
     let app_env = format!("{env_prefix}_LANG");
     let env_vals = [app_env.as_str(), "LC_ALL", "LC_MESSAGES", "LANG"].map(|k| std::env::var(k).ok());
@@ -17,7 +17,7 @@ pub fn resolve(env_prefix: &str, cli_lang: Option<&str>) -> Vec<LanguageIdentifi
         .collect()
 }
 
-/// `ja_JP.UTF-8` / `ja-JP` / `ja` などを言語タグに正規化する。`C` と `POSIX` は無視する。
+/// Parses `ja_JP.UTF-8`, `ja-JP`, `ja`, ... into a language identifier. `C` and `POSIX` give `None`.
 pub fn parse_posix(v: &str) -> Option<LanguageIdentifier> {
     let v = v.trim().split(['.', '@']).next().unwrap_or("");
     if v.is_empty() || v.eq_ignore_ascii_case("C") || v.eq_ignore_ascii_case("POSIX") {
@@ -26,7 +26,7 @@ pub fn parse_posix(v: &str) -> Option<LanguageIdentifier> {
     v.replace('_', "-").parse().ok()
 }
 
-/// clap に渡す前に argv から `--lang <v>` / `--lang=<v>` を拾う。`--` 以降は見ない。
+/// Finds `--lang <v>` or `--lang=<v>` in the arguments before clap parses them. Stops at `--`.
 pub fn pre_scan_lang<I, T>(args: I) -> Option<String>
 where
     I: IntoIterator<Item = T>,

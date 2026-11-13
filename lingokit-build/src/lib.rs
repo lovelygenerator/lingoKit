@@ -1,7 +1,7 @@
-//! lingokit の build.rs 用ヘルパー。
+//! `build.rs` helper for [lingokit](https://docs.rs/lingokit).
 //!
-//! `<dir>/<lang>/*.ftl` を検証し、`OUT_DIR/lingokit_locales.rs` を生成する。
-//! 生成物はクレートのルートで `lingokit::include_locales!()` により展開する。
+//! Checks the FTL files in `<dir>/<locale>/**/*.ftl` and generates `OUT_DIR/lingokit_locales.rs`,
+//! which `lingokit::include_locales!()` includes at the crate root.
 //!
 //! ```ignore
 //! // build.rs
@@ -10,17 +10,22 @@
 //! }
 //! ```
 //!
-//! 生成されるもの:
+//! Generated items:
 //! - `pub static LOCALES: lingokit::Locales`
-//! - `pub mod msg`: メッセージごとの型付きアクセサ(`msg::err_not_found(path)` など)
+//! - `pub mod msg`: a typed function for each message (`msg::err_not_found(path)`)
 //!
-//! ビルド時チェックは [ftl-check](https://crates.io/crates/ftl-check) で行う:
-//! - 重大度 error の診断(構文エラー、翻訳の欠落、引数の不一致など) → ビルド失敗
-//! - 重大度 warn の診断 → `cargo:warning`
+//! # Checks
 //!
-//! `ftl-check.toml` があれば(`CARGO_MANIFEST_DIR` から上位へ探す)その `[rules]` などに従う。
-//! `path` と `base` は lingokit-build の設定で上書きするので、コード生成と同じファイルを検査する。
-//! 同じ設定ファイルで CLI の `ftl-check` を実行すれば、ビルドと同じ結果になる。
+//! The FTL files are checked with [ftl-check](https://crates.io/crates/ftl-check) on every build:
+//!
+//! - diagnostics with severity `error` (syntax errors, missing translations, mismatched
+//!   variables, ...) fail the build;
+//! - diagnostics with severity `warn` are printed as cargo warnings.
+//!
+//! An `ftl-check.toml`, searched for from `CARGO_MANIFEST_DIR` upward, configures the checks
+//! (`[rules]`, `[allow]`, ...). Its `path` and `base` are overridden by [`Config`], so the checked
+//! files are the ones the code is generated from. Running the `ftl-check` command line with the
+//! same config file gives the same result.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -29,7 +34,7 @@ use std::{env, fs};
 
 use fluent_syntax::{ast, parser};
 
-/// メッセージ ID → 参照している変数名
+/// Message ID → the variables it uses
 type Messages = BTreeMap<String, BTreeSet<String>>;
 
 struct Lang {
@@ -38,7 +43,7 @@ struct Lang {
     messages: Messages,
 }
 
-/// 生成の設定。
+/// Configuration of the generation. See the [crate] documentation.
 #[derive(Debug, Clone)]
 pub struct Config {
     dir: PathBuf,
@@ -47,38 +52,47 @@ pub struct Config {
 }
 
 impl Config {
-    /// `dir` は `CARGO_MANIFEST_DIR` からの相対パス(絶対パスも可)。
+    /// `dir` contains one folder per locale. Relative paths are resolved from `CARGO_MANIFEST_DIR`.
     pub fn new(dir: impl Into<PathBuf>) -> Self {
         Self { dir: dir.into(), default_lang: "en".into(), env_prefix: None }
     }
 
-    /// 最終フォールバック言語(既定: `en`)。`<dir>/<lang>/` が必須。
+    /// The default locale (default: `en`). `<dir>/<lang>/` must exist.
     pub fn default_lang(mut self, lang: impl Into<String>) -> Self {
         self.default_lang = lang.into();
         self
     }
 
-    /// 環境変数の接頭辞(既定: パッケージ名の大文字。`-` は `_`)。
-    /// 例: `my-tool-core` → `MY_TOOL_CORE`。`<PREFIX>_LANG` などに使う。
+    /// Prefix of the environment variables such as `<PREFIX>_LANG`.
+    /// Default: the package name in upper case with `_` for `-` (`my-tool-core` → `MY_TOOL_CORE`).
     pub fn env_prefix(mut self, prefix: impl Into<String>) -> Self {
         self.env_prefix = Some(prefix.into());
         self
     }
 
-    /// 検証して生成する。失敗したら panic(= ビルド失敗)。
+    /// Checks and generates, panicking (failing the build) on errors.
+    ///
+    /// # Panics
+    ///
+    /// When [`Config::try_generate`] fails.
     pub fn generate(self) {
         if let Err(e) = self.try_generate() {
             panic!("{e}");
         }
     }
 
+    /// Checks and generates.
+    ///
+    /// # Errors
+    ///
+    /// When the folder cannot be read, the default locale is missing, or ftl-check reports errors.
     pub fn try_generate(self) -> Result<(), String> {
         let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?);
         let dir = manifest.join(&self.dir);
-        let dir = dir.canonicalize().map_err(|e| format!("{} が見つかりません: {e}", dir.display()))?;
+        let dir = dir.canonicalize().map_err(|e| format!("{} not found: {e}", dir.display()))?;
         println!("cargo:rerun-if-changed={}", dir.display());
         for k in ["FTL_CHECK_LANG", "LC_ALL", "LC_MESSAGES", "LANG"] {
-            println!("cargo:rerun-if-env-changed={k}"); // ftl-check の表示言語
+            println!("cargo:rerun-if-env-changed={k}"); // display language of ftl-check
         }
 
         let env_prefix = self.env_prefix.clone().unwrap_or_else(|| {
@@ -91,20 +105,20 @@ impl Config {
         let default = langs
             .iter()
             .find(|l| l.name == self.default_lang)
-            .ok_or_else(|| format!("既定言語のフォルダ {}/{}/ がありません", dir.display(), self.default_lang))?;
+            .ok_or_else(|| format!("missing folder of the default locale: {}/{}/", dir.display(), self.default_lang))?;
 
         let out = PathBuf::from(env::var("OUT_DIR").map_err(|e| e.to_string())?).join("lingokit_locales.rs");
         fs::write(out, render(&langs, default, &self.default_lang, &env_prefix)).map_err(|e| e.to_string())
     }
 }
 
-/// ftl-check で検査する。error があれば Err、warn は cargo:warning に出す。
+/// Runs ftl-check: errors become `Err`, warnings are printed as cargo warnings.
 fn check(manifest: &Path, dir: &Path, base: &str) -> Result<(), String> {
     use ftl_check::diag::Severity;
     use ftl_check::output::{self, TextStyle};
     use ftl_check::run::{self, Command, Options};
 
-    // 設定ファイルの場所(path はその場所からの相対で指定する)
+    // The config file; `path` is relative to its directory
     let loaded = ftl_check::project::config::load(None, manifest).map_err(|e| format!("ftl-check.toml: {e:?}"))?;
     if let Some(f) = &loaded.file {
         println!("cargo:rerun-if-changed={}", f.display());
@@ -119,7 +133,7 @@ fn check(manifest: &Path, dir: &Path, base: &str) -> Result<(), String> {
         base: Some(base.to_string()),
         ..Options::default()
     };
-    let report = run::run(Command::Check, &opts).map_err(|f| format!("ftl-check を実行できませんでした: {:?}", f.problem))?;
+    let report = run::run(Command::Check, &opts).map_err(|f| format!("ftl-check could not run: {:?}", f.problem))?;
 
     let lang = ftl_check::i18n::choose_lang(&ftl_check::i18n::LangInputs {
         cli: None,
@@ -139,11 +153,11 @@ fn check(manifest: &Path, dir: &Path, base: &str) -> Result<(), String> {
         }
         Ok(())
     } else {
-        Err(format!("ftl-check で FTL のエラーが見つかりました(詳細は `ftl-check explain <コード>`):\n\n{text}"))
+        Err(format!("ftl-check found errors in the FTL files (see `ftl-check explain <code>`):\n\n{text}"))
     }
 }
 
-/// コード生成用に読み込む(検査は ftl-check で済んでいる)
+/// Reads the files for code generation (already checked by ftl-check)
 fn load(dir: &Path) -> Result<Vec<Lang>, String> {
     let mut langs = Vec::new();
     for ldir in sorted_entries(dir)?.into_iter().filter(|p| p.is_dir()) {
@@ -233,15 +247,15 @@ const KEYWORDS: &[&str] = &[
     "override", "priv", "typeof", "unsized", "virtual", "yield", "try", "gen",
 ];
 
-/// キー/変数名 → Rust の識別子(lingokit-macros と同じ規則)
+/// Key or variable name → Rust identifier (same rule as lingokit-macros)
 fn rust_ident(s: &str) -> String {
     let s = s.replace(['-', '.'], "_");
     if KEYWORDS.contains(&s.as_str()) { format!("r#{s}") } else { s }
 }
 
 fn render(langs: &[Lang], default: &Lang, default_lang: &str, env_prefix: &str) -> String {
-    let mut o = String::from("// @generated by lingokit-build — 編集しないでください\n\n");
-    o.push_str("/// 翻訳リソース一式(lingokit-build が生成)\n");
+    let mut o = String::from("// @generated by lingokit-build. Do not edit.\n\n");
+    o.push_str("/// The translations (generated by lingokit-build).\n");
     o.push_str("pub static LOCALES: ::lingokit::Locales = ::lingokit::Locales {\n");
     let _ = writeln!(o, "    default_lang: {default_lang:?},\n    env_prefix: {env_prefix:?},\n    resources: &[");
     for l in langs {
@@ -258,7 +272,7 @@ fn render(langs: &[Lang], default: &Lang, default_lang: &str, env_prefix: &str) 
     }
     o.push_str("    ],\n};\n\n");
 
-    o.push_str("/// メッセージごとの型付きアクセサ(lingokit-build が生成)\n");
+    o.push_str("/// A typed function for each message (generated by lingokit-build).\n");
     o.push_str("#[allow(dead_code, clippy::all)]\npub mod msg {\n    use ::lingokit::{FluentArgs, FluentValue, Msg};\n\n");
     for (id, vars) in &default.messages {
         let fname = rust_ident(id);
@@ -276,7 +290,7 @@ fn render(langs: &[Lang], default: &Lang, default_lang: &str, env_prefix: &str) 
         }
         let _ = writeln!(o, "        Msg::with_args({id:?}, args)\n    }}\n");
     }
-    o.push_str("    /// derive(LocalizedError) の検査用: メッセージが使う変数\n");
+    o.push_str("    /// The variables of each message, checked by derive(LocalizedError).\n");
     o.push_str("    #[doc(hidden)]\n    #[allow(non_upper_case_globals)]\n    pub mod __vars {\n");
     for (id, vars) in &default.messages {
         let list: Vec<String> = vars.iter().map(|v| format!("{v:?}")).collect();

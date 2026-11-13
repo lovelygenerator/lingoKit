@@ -1,4 +1,4 @@
-# lingokit の組み込みメッセージ。利用側の FTL に同じキーを書けば上書きできる。
+# Built-in messages of lingokit. Define the same key in your FTL files to override one.
 
 cli-arg-lang = Display language (e.g. en, ja)
 cli-arg-help = Print help

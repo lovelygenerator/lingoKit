@@ -5,12 +5,12 @@ use unic_langid::LanguageIdentifier;
 
 use crate::{Locales, LocalizedError, Msg};
 
-/// lingokit 自身の組み込みメッセージ(clap の見出し・エラーなど)。利用側の FTL で上書きできる。
+/// Built-in messages (clap headings, errors, ...). The application's FTL files can override them.
 static BUILTIN: &[(&str, &str)] = &[("en", include_str!("../builtin/en/lingokit.ftl")), ("ja", include_str!("../builtin/ja/lingokit.ftl"))];
 
-/// 言語のフォールバックチェーン(例: ja-JP → ja → en)を持つ翻訳器。
+/// Formats messages in the chosen locale, falling back along a chain (e.g. `ja-JP` → `ja` → `en`).
 ///
-/// `Send + Sync` なので `Arc<Localizer>` として共有できる。
+/// `Localizer` is `Send + Sync`, so it can be shared as `Arc<Localizer>`.
 pub struct Localizer {
     locales: &'static Locales,
     chain: Vec<(LanguageIdentifier, FluentBundle<FluentResource>)>,
@@ -24,9 +24,9 @@ impl std::fmt::Debug for Localizer {
 }
 
 impl Localizer {
-    /// 要求言語(優先度順)から、利用可能な言語と折衝して作る。
+    /// Negotiates the requested locales (in order of preference) with the available ones.
     pub fn new(locales: &'static Locales, requested: &[LanguageIdentifier]) -> Self {
-        let default: LanguageIdentifier = locales.default_lang.parse().expect("default_lang が不正です");
+        let default: LanguageIdentifier = locales.default_lang.parse().expect("invalid default_lang");
         let available: Vec<LanguageIdentifier> =
             locales.resources.iter().filter_map(|(l, _)| l.parse().ok()).collect();
         let mut langs: Vec<LanguageIdentifier> =
@@ -41,48 +41,49 @@ impl Localizer {
         Self { locales, chain }
     }
 
-    /// CLI の `--lang` 値(あれば)と環境変数から作る。
-    /// 優先順位: `cli_lang` → `<PREFIX>_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` → 既定言語
+    /// Chooses the locale from `cli_lang` (a `--lang` value), then `<PREFIX>_LANG`, `LC_ALL`,
+    /// `LC_MESSAGES`, `LANG`, then the default locale.
     pub fn from_env(locales: &'static Locales, cli_lang: Option<&str>) -> Self {
         Self::new(locales, &crate::locale::resolve(locales.env_prefix, cli_lang))
     }
 
-    /// 単一言語のみ(フォールバックなし)。キー整合性テスト用。
+    /// A localizer for `lang` only, without fallback. Used to test which keys a locale has.
     pub fn only(locales: &'static Locales, lang: &str) -> Self {
-        let l: LanguageIdentifier = lang.parse().expect("不正な言語タグ");
+        let l: LanguageIdentifier = lang.parse().expect("invalid locale");
         Self { locales, chain: vec![(l.clone(), build_bundle(locales, &l))] }
     }
 
+    /// The translations this localizer uses.
     pub fn locales(&self) -> &'static Locales {
         self.locales
     }
 
-    /// 実際に使われる第一言語。
+    /// The first locale of the chain.
     pub fn lang(&self) -> &LanguageIdentifier {
         &self.chain[0].0
     }
 
-    /// 第一言語にキーがあるか(フォールバックしない)。`id.attr` 形式も可。
+    /// Whether the first locale has `id` (`id` or `id.attr`), without fallback.
     pub fn has_own(&self, id: &str) -> bool {
         lookup(&self.chain[0].1, id, None).is_some()
     }
 
-    /// キーを引く。見つからなければ `None`。`id.attr` 形式で属性も引ける。
+    /// Formats `id` (`id` or `id.attr`), or `None` when no locale of the chain has it.
     pub fn get(&self, id: &str, args: Option<&FluentArgs>) -> Option<String> {
         self.chain.iter().find_map(|(_, b)| lookup(b, id, args))
     }
 
-    /// キーを引く。見つからなければ ID をそのまま返す。
+    /// Formats `id`, or returns `id` itself when it is missing.
     pub fn fmt(&self, id: &str, args: Option<&FluentArgs>) -> String {
         self.get(id, args).unwrap_or_else(|| id.to_string())
     }
 
-    /// 生成アクセサ(`msg::*`)の結果を文字列にする。
+    /// Formats a [`Msg`], such as one returned by the generated `msg` functions.
     pub fn msg(&self, m: &Msg<'_>) -> String {
         self.fmt(m.id, m.args.as_ref())
     }
 
-    /// エラーをユーザー向けメッセージにする(source の連鎖は含まない)。
+    /// Formats the message of an error (without its `source()` chain; see [`crate::render_error_chain`]).
     pub fn error(&self, e: &dyn LocalizedError) -> String {
         self.msg(&e.message())
     }
@@ -90,19 +91,19 @@ impl Localizer {
 
 fn build_bundle(locales: &Locales, lang: &LanguageIdentifier) -> FluentBundle<FluentResource> {
     let mut bundle = FluentBundle::new_concurrent(vec![lang.clone()]);
-    // 端末出力に Unicode 分離記号(U+2068/U+2069)が混ざらないようにする
+    // Keep Unicode isolation marks (U+2068/U+2069) out of terminal output
     bundle.set_use_isolating(false);
     let key = lang.to_string();
     if let Some((_, src)) = BUILTIN.iter().find(|(l, _)| *l == key) {
-        let res = FluentResource::try_new((*src).to_string()).expect("組み込み FTL が不正です");
-        bundle.add_resource(res).expect("組み込み FTL が不正です");
+        let res = FluentResource::try_new((*src).to_string()).expect("invalid built-in FTL");
+        bundle.add_resource(res).expect("invalid built-in FTL");
     }
     if let Some((_, files)) = locales.resources.iter().find(|(l, _)| *l == key) {
         for (name, src) in *files {
-            // 構文は build.rs で検証済み
+            // Already checked by lingokit-build
             let res = FluentResource::try_new((*src).to_string())
-                .unwrap_or_else(|_| panic!("{key}/{name} のパースに失敗しました"));
-            // 利用側の定義で組み込みメッセージを上書きできるようにする
+                .unwrap_or_else(|_| panic!("failed to parse {key}/{name}"));
+            // Let the application override built-in messages
             bundle.add_resource_overriding(res);
         }
     }

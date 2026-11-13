@@ -1,11 +1,12 @@
-//! キー整合性テスト用のヘルパー。
+//! Helpers for tests that check the keys an application needs.
 
 use crate::{Locales, Localizer};
 
-/// 必須キーを検査する。`required` の各要素は「どれか1つがあればよい」候補。
+/// Checks that the locales have the `required` keys. Each element lists alternatives, one of
+/// which must exist.
 ///
-/// - 既定言語での欠落 → `Err`
-/// - それ以外の言語での欠落 → 警告を表示するだけ(既定言語にフォールバックする)
+/// Keys missing from the default locale are an `Err`. Keys missing from other locales are
+/// printed as warnings, as those fall back to the default locale.
 pub fn check_required_keys(locales: &'static Locales, required: &[Vec<String>]) -> Result<(), String> {
     let mut missing_default = Vec::new();
     for (lang, _) in locales.resources {
@@ -22,7 +23,7 @@ pub fn check_required_keys(locales: &'static Locales, required: &[Vec<String>]) 
             missing_default = missing;
         } else {
             for m in &missing {
-                eprintln!("warning: [lingokit] {lang}: キー `{m}` がありません({} にフォールバック)", locales.default_lang);
+                eprintln!("warning: [lingokit] {lang}: missing key `{m}` (falls back to {})", locales.default_lang);
             }
         }
     }
@@ -30,14 +31,18 @@ pub fn check_required_keys(locales: &'static Locales, required: &[Vec<String>]) 
         Ok(())
     } else {
         Err(format!(
-            "既定言語 {} の FTL に次のキーを追加してください:\n  {}",
+            "add these keys to the FTL files of the default locale {}:\n  {}",
             locales.default_lang,
             missing_default.join("\n  ")
         ))
     }
 }
 
-/// `check_required_keys` が `Err` なら panic する。
+/// [`check_required_keys`], panicking on `Err`.
+///
+/// # Panics
+///
+/// When keys are missing from the default locale.
 pub fn assert_required_keys(locales: &'static Locales, required: &[Vec<String>]) {
     if let Err(e) = check_required_keys(locales, required) {
         panic!("{e}");

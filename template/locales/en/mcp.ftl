@@ -1,5 +1,5 @@
-# MCP(キー規約は crates/mcp/src/localize.rs を参照)
-# 説明・スキーマの翻訳は <ENV_PREFIX>_MCP_LOCALIZE_SCHEMA=true のときだけ使われる
+# MCP keys: mcp-instructions / mcp-tool-<name> (.title) / mcp-tool-<name>-param-<prop>
+# Used only with <ENV_PREFIX>_MCP_LOCALIZE_SCHEMA=true
 
 mcp-instructions = Sample MCP server. Use count_words to count words in a text file.
 

@@ -1,4 +1,4 @@
-//! CLI。help はソース上で英語で書き、表示時に FTL(cli-*)で上書きされる。
+//! The CLI. Help texts are written in English here and localized from the FTL files (cli-*).
 
 use std::path::PathBuf;
 

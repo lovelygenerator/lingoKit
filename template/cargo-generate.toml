@@ -1,16 +1,16 @@
 [template]
 cargo_generate_version = ">=0.21.0"
-# Rust ソースと FTL は Liquid で処理しない
+# Rust sources and FTL files are copied without Liquid processing
 exclude = ["crates/*/src/**", "crates/*/tests/**", "locales/**"]
 ignore = ["target", "hooks", "private"]
 
 [placeholders]
-with_cli = { type = "bool", prompt = "CLI(clap)クレートを生成しますか?", default = true }
-with_mcp = { type = "bool", prompt = "MCP サーバー(rmcp)クレートを生成しますか?", default = true }
-lingokit_git = { type = "string", prompt = "lingokit の git リポジトリ URL", default = "https://github.com/lovelygenerator/lingokit" }
+with_cli = { type = "bool", prompt = "Generate the CLI crate (clap)?", default = true }
+with_mcp = { type = "bool", prompt = "Generate the MCP server crate (rmcp)?", default = true }
+lingokit_git = { type = "string", prompt = "Git repository of lingokit", default = "https://github.com/lovelygenerator/lingokit" }
 
 [hooks]
-# env_prefix の既定値(crate_name の大文字)を決める。-d env_prefix=FOO で上書きできる。
+# Sets the default env_prefix (crate_name in upper case). Override with -d env_prefix=FOO.
 pre = ["hooks/pre.rhai"]
 
 [conditional.'with_cli == false']

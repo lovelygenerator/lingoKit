@@ -1,33 +1,35 @@
 # {{project-name}}
 
-Rust ライブラリ + CLI(clap)+ MCP サーバー(rmcp)。多言語対応には [lingokit]({{lingokit_git}}) を使います。
+[日本語](README.ja.md)
 
-## 構成
+A Rust library with a CLI (clap) and an MCP server (rmcp), localized with [lingokit]({{lingokit_git}}).
+
+## Layout
 
 ```
-locales/<lang>/*.ftl   翻訳(言語を追加するにはフォルダをコピーする)
-crates/core            ライブラリ本体。build.rs で FTL を検証し、LOCALES と msg を生成する
-crates/cli             clap(lingokit::clap::parse で help・エラーを翻訳)
-crates/mcp             rmcp(lingokit::rmcp で説明・スキーマを翻訳)
+locales/<locale>/*.ftl   translations (copy a folder to add a language)
+crates/core              the library; build.rs checks the FTL files and generates LOCALES and msg
+crates/cli               clap (lingokit::clap::parse localizes help and errors)
+crates/mcp               rmcp (lingokit::rmcp localizes descriptions and schemas)
 ```
 
-## 開発の流れ
+## Workflow
 
-1. `crates/core` に関数とエラーを書く。エラーには `#[ftl("err-xxx")]` を付け、`locales/*/core.ftl` にキーを足す(キーがないとコンパイルエラー)
-2. `crates/cli` / `crates/mcp` を英語の doc コメントで書く
-3. `cargo test` を実行し、足りないキーの一覧を `cli.ftl` / `mcp.ftl` に追加する
+1. Write functions and errors in `crates/core`. Give each error `#[ftl("err-xxx")]` and add the key to `locales/*/core.ftl` (a missing key is a compile error).
+2. Write `crates/cli` / `crates/mcp` with English doc comments.
+3. Run `cargo test` and add the keys it lists to `cli.ftl` / `mcp.ftl`.
 
-FTL はビルドのたびに [ftl-check](https://github.com/lovelygenerator/ftl-check) で検査されます。翻訳の欠落や引数の不一致はビルドエラー、未翻訳の疑いなどは警告です。設定は `ftl-check.toml` にあり、CLI の `ftl-check` でも同じ結果になります。
+The FTL files are checked with [ftl-check](https://github.com/lovelygenerator/ftl-check) on every build: missing translations and mismatched variables are errors, possibly untranslated texts are warnings. The configuration is `ftl-check.toml`; the `ftl-check` command gives the same result.
 
-## 言語の決まり方
+## Locale
 
-`--lang`(CLI のみ)→ `{{env_prefix}}_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` → `en`
+`--lang` (CLI only) → `{{env_prefix}}_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` → `en`
 
 ```sh
 cargo run --bin {{project-name}} -- --lang ja count README.md
 ```
 
-## MCP クライアントの設定例
+## MCP client configuration
 
 ```json
 {
@@ -40,4 +42,4 @@ cargo run --bin {{project-name}} -- --lang ja count README.md
 }
 ```
 
-ツールの説明・スキーマは既定で英語のままです。翻訳するには `"{{env_prefix}}_MCP_LOCALIZE_SCHEMA": "true"` を追加してください。
+Tool descriptions and schemas stay in English unless `"{{env_prefix}}_MCP_LOCALIZE_SCHEMA": "true"` is added. Results and errors are always localized.

@@ -1,4 +1,4 @@
-//! MCP サーバー。ツールの説明はソース上で英語で書き、必要なら FTL(mcp-*)で上書きされる。
+//! The MCP server. Tool descriptions are written in English here and can be localized from the FTL files (mcp-*).
 
 use std::path::Path;
 
@@ -34,7 +34,7 @@ impl Server {
             Ok(n) => CallToolResult::success(vec![ContentBlock::text(
                 self.loc.msg(&msg::result_word_count(n, p.path.as_str())),
             )]),
-            // 業務エラーは LLM が読めるよう CallToolResult::error で返す
+            // Errors of the tool are returned as a tool result, so that the model can read them
             Err(e) => CallToolResult::error(vec![ContentBlock::text(self.loc.error(&e))]),
         })
     }

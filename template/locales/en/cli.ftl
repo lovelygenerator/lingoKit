@@ -1,5 +1,5 @@
-# CLI のキー規約: cli-about / cli-<path>-about / cli-<path>-arg-<id> / cli-<path>-arg-<id>-value-<v>
-# 見出し・help/version/lang 引数・clap エラーは lingokit の組み込み訳を使う(ここに書けば上書き)
+# CLI keys: cli-about / cli-<path>-about / cli-<path>-arg-<id> / cli-<path>-arg-<id>-value-<v>
+# Headings, the help/version/lang arguments and clap errors are built into lingokit (define them here to override)
 
 cli-about = Sample CLI
 

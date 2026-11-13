@@ -1,8 +1,8 @@
-//! ライブラリ本体(サンプル: テキストファイルの単語数を数える)。
+//! The library (sample: counting the words of a text file).
 
 use std::path::{Path, PathBuf};
 
-// LOCALES(翻訳リソース)と msg(型付きアクセサ)を定義する。CLI / MCP からも使う。
+// Defines LOCALES (translations) and msg (typed accessors), also used by the CLI and the MCP server.
 lingokit::include_locales!();
 
 #[derive(Debug, thiserror::Error, lingokit::LocalizedError)]
@@ -22,7 +22,7 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-/// 単語数を数える。
+/// Counts the words of a text file.
 pub fn count_words(path: &Path) -> Result<usize> {
     let text = std::fs::read_to_string(path).map_err(|source| match source.kind() {
         std::io::ErrorKind::NotFound => Error::NotFound { path: path.into() },

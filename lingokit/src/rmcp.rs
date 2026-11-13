@@ -1,15 +1,15 @@
-//! rmcp の MCP サーバーを FTL のキー規約に従って翻訳する(feature `rmcp`)。
+//! Localizing [rmcp](https://docs.rs/rmcp) MCP servers (feature `rmcp`).
 //!
-//! | 対象 | キー |
+//! | Target | Key |
 //! |---|---|
-//! | ツールの説明 | `mcp-tool-<name>` |
-//! | ツールのタイトル | `mcp-tool-<name>.title`(属性) |
-//! | パラメータの説明 | `mcp-tool-<name>-param-<prop>` |
-//! | サーバーの instructions | `mcp-instructions` |
+//! | Tool description | `mcp-tool-<name>` |
+//! | Tool title | `mcp-tool-<name>.title` (attribute) |
+//! | Parameter description | `mcp-tool-<name>-param-<prop>` |
+//! | Server instructions | `mcp-instructions` |
 //!
-//! 注意:
-//! - `ToolRouter.map`(pub)に依存している
-//! - スキーマはトップレベルの `properties` だけを対象にする(`$defs` の入れ子は対象外)
+//! Notes:
+//! - This module uses the public `ToolRouter::map` of rmcp, so the rmcp version is pinned to `~3.10`.
+//! - Only the top-level `properties` of an input schema are localized, not nested `$defs`.
 
 use std::sync::Arc;
 
@@ -19,15 +19,14 @@ use serde_json::Value;
 
 use crate::{Locales, Localizer};
 
-/// ツールの説明・スキーマを翻訳するか(既定: しない)。
-///
-/// 既定では翻訳せず、`<PREFIX>_MCP_LOCALIZE_SCHEMA=true`(`1` / `yes` / `on` も可)のときだけ翻訳する。
+/// Whether tool descriptions and schemas are localized: only when
+/// `<PREFIX>_MCP_LOCALIZE_SCHEMA` is `true`, `1`, `yes` or `on`. Off by default.
 pub fn schema_localization_enabled(locales: &Locales) -> bool {
     std::env::var(format!("{}_MCP_LOCALIZE_SCHEMA", locales.env_prefix))
         .is_ok_and(|v| matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
 }
 
-/// 説明・タイトル・パラメータ説明を翻訳する。
+/// Localizes the descriptions, titles and parameter descriptions of all tools.
 pub fn localize<S>(mut router: ToolRouter<S>, loc: &Localizer) -> ToolRouter<S> {
     for route in router.map.values_mut() {
         localize_tool(&mut route.attr, loc);
@@ -35,12 +34,12 @@ pub fn localize<S>(mut router: ToolRouter<S>, loc: &Localizer) -> ToolRouter<S> 
     router
 }
 
-/// [`schema_localization_enabled`] が true のときだけ [`localize`] する。
+/// [`localize`]s only when [`schema_localization_enabled`] is true.
 pub fn localize_if_enabled<S>(router: ToolRouter<S>, loc: &Localizer) -> ToolRouter<S> {
     if schema_localization_enabled(loc.locales()) { localize(router, loc) } else { router }
 }
 
-/// サーバーの instructions。スキーマ翻訳が有効なら `mcp-instructions`、無効なら `default` を返す。
+/// The server instructions: `mcp-instructions` when schema localization is enabled, otherwise `default`.
 pub fn instructions(loc: &Localizer, default: &str) -> String {
     if schema_localization_enabled(loc.locales()) {
         loc.get("mcp-instructions", None).unwrap_or_else(|| default.to_string())
@@ -49,6 +48,7 @@ pub fn instructions(loc: &Localizer, default: &str) -> String {
     }
 }
 
+/// Localizes one tool.
 pub fn localize_tool(tool: &mut Tool, loc: &Localizer) {
     let key = format!("mcp-tool-{}", tool.name);
     if let Some(d) = loc.get(&key, None) {
@@ -71,7 +71,7 @@ pub fn localize_tool(tool: &mut Tool, loc: &Localizer) {
     tool.input_schema = Arc::new(schema);
 }
 
-/// 必須キーの一覧。
+/// The keys the tools of `router` need.
 pub fn required_keys<S>(router: &ToolRouter<S>) -> Vec<String> {
     let mut keys = Vec::new();
     for route in router.map.values() {
@@ -85,7 +85,11 @@ pub fn required_keys<S>(router: &ToolRouter<S>) -> Vec<String> {
     keys
 }
 
-/// 全ツール・パラメータのキーが既定言語にあるかを検査する(テスト用)。
+/// Asserts that the default locale has a key for every tool and parameter. Intended for tests.
+///
+/// # Panics
+///
+/// When keys are missing, with the list of keys to add.
 pub fn assert_keys<S>(router: &ToolRouter<S>, locales: &'static Locales) {
     let required: Vec<Vec<String>> = required_keys(router).into_iter().map(|k| vec![k]).collect();
     crate::testing::assert_required_keys(locales, &required);

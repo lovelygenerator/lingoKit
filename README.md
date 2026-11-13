@@ -1,142 +1,171 @@
 # lingokit
 
-**CLI(clap)と MCP サーバー(rmcp)の多言語対応を、1組の `.ftl` ファイルで。**
+[日本語](README.ja.md)
 
-[Fluent](https://projectfluent.org/) の薄いラッパーです。help・clap のエラー・MCP ツールの説明・エラーメッセージを、同じ翻訳ファイルから言語ごとに出し分けます。
+**Localize your clap CLI and rmcp MCP server with one set of `.ftl` files.**
 
-| クレート | 役割 |
+lingokit is a thin wrapper around [Fluent](https://projectfluent.org/). Help texts, clap errors,
+MCP tool descriptions and your own error messages all come from the same translation files.
+
+| Crate | Role |
 |---|---|
-| `lingokit` | 実行時(Localizer・ロケール解決)。feature `clap` / `rmcp` / `derive`(既定で有効) |
-| `lingokit-build` | build.rs 用。FTL の検証と型付きアクセサの生成 |
-| `lingokit-macros` | `#[derive(LocalizedError)]` |
+| [`lingokit`](https://docs.rs/lingokit) | Runtime: `Localizer`, locale resolution, built-in messages. Features `clap`, `rmcp`, `derive` (default) |
+| [`lingokit-build`](https://docs.rs/lingokit-build) | `build.rs` helper: checks the FTL files and generates typed accessors |
+| [`lingokit-macros`](https://docs.rs/lingokit-macros) | `#[derive(LocalizedError)]` (re-exported by `lingokit`) |
 
-## テンプレートから始める
+## Start from the template
 
-ライブラリ本体・CLI・MCP サーバーのワークスペースを [cargo-generate](https://github.com/cargo-generate/cargo-generate) で作れます(`template/`)。
+Create a workspace with a library, a CLI and an MCP server with
+[cargo-generate](https://github.com/cargo-generate/cargo-generate) (`template/`):
 
 ```sh
 cargo generate gh:lovelygenerator/lingokit template --name my-tool
-# CLI や MCP が不要なら -d with_cli=false / -d with_mcp=false
+# without the CLI or the MCP server: -d with_cli=false / -d with_mcp=false
 ```
 
-## 導入
+## Installation
 
 ```toml
 [dependencies]
-lingokit = { git = "https://github.com/lovelygenerator/lingokit", features = ["clap", "rmcp"] }
+lingokit = { version = "0.1", features = ["clap", "rmcp"] }
 
 [build-dependencies]
-lingokit-build = { git = "https://github.com/lovelygenerator/lingokit" }
+lingokit-build = "0.1"
 ```
 
 ```rust
 // build.rs
 fn main() {
-    lingokit_build::Config::new("locales").generate(); // env_prefix(...) / default_lang(...) も指定できる
+    lingokit_build::Config::new("locales").generate(); // also .env_prefix(..) / .default_lang(..)
 }
 ```
 
 ```rust
-// lib.rs(クレートのルート)。LOCALES と msg モジュールが定義される
+// lib.rs (crate root): defines LOCALES and the msg module
 lingokit::include_locales!();
 ```
 
-FTL は `locales/<lang>/*.ftl` に置きます(既定言語は `en`)。
+Put the FTL files in `locales/<locale>/*.ftl`. The default locale is `en`.
 
-## エラー
+```ftl
+# locales/en/main.ftl
+err-not-found = File not found: { $path }
+result-word-count = { $count ->
+    [one] { $path } contains { $count } word.
+   *[other] { $path } contains { $count } words.
+}
+```
+
+## Errors
 
 ```rust
 #[derive(Debug, thiserror::Error, lingokit::LocalizedError)]
 pub enum Error {
-    #[error("not found: {}", path.display())]   // 英語(ログ用)
-    #[ftl("err-not-found")]                      // 表示用。フィールドが $path に入る
+    #[error("not found: {}", path.display())]   // English, for logs
+    #[ftl("err-not-found")]                      // for display; the field becomes $path
     NotFound { path: PathBuf },
     #[error("io")]
     #[ftl("err-io")]
-    Io(#[from] std::io::Error),                  // #[source]/#[from] は引数に渡さない
+    Io(#[from] std::io::Error),                  // #[source] / #[from] fields are not passed
 }
+
+let text = loc.error(&err);                      // "ファイルが見つかりません: a.txt" in ja
 ```
 
-- キーが FTL にない、またはメッセージが使う変数がフィールドにない → **コンパイルエラー**
-- 数値はそのまま(複数形の選択に使える)、パスは `display()`、それ以外は `Display` で渡す
-- 渡したくないフィールドには `#[ftl(skip)]` を付ける
+- It is a **compile error** when the key is not in the FTL files, or when the message uses a
+  variable that is not a field.
+- Numbers stay numbers (so plurals work), paths use `display()`, everything else `Display`.
+- Mark fields that should not be passed with `#[ftl(skip)]`.
 
-キーを直接使うときは生成アクセサを使います: `loc.msg(&msg::err_not_found(path))`
+For other messages, use the generated functions: `loc.msg(&msg::result_word_count(n, path))`.
 
-## CLI(feature `clap`)
+## CLI (feature `clap`)
 
 ```rust
 fn main() -> ExitCode {
     let (cli, loc) = lingokit::clap::parse::<Cli>(&LOCALES);
-    lingokit::clap::exit_code(&loc, run(cli, &loc))   // エラーは「エラー: ...」で表示
+    lingokit::clap::exit_code(&loc, run(cli, &loc))   // errors are printed as "error: ..."
 }
 ```
 
-- `--lang` は未定義なら自動で追加します(グローバル引数)
-- help の見出し・help/version 引数・既定値と候補値のラベル・主な clap エラーは組み込みの en/ja 訳があります(利用側の FTL で上書き可)
+- A global `--lang` argument is added when your command does not define one.
+- Help headings, the help/version arguments, the labels of defaults and possible values, and
+  the common clap errors have built-in English and Japanese translations, which your FTL files
+  can override.
 
-| 対象 | キー |
+| Target | Key |
 |---|---|
-| コマンドの説明 | `cli-about` / `cli-<path>-about`(`-long-about` も可) |
-| 引数の help | `cli-<path>-arg-<id>`(`-long` も可)、なければ `cli-arg-<id>` |
-| 候補値の説明 | `cli-<path>-arg-<id>-value-<value>` |
-| clap のエラー | `cli-error-<ErrorKind の kebab-case>` |
+| Command about | `cli-about` / `cli-<path>-about` (also `-long-about`) |
+| Argument help | `cli-<path>-arg-<id>` (also `-long`), falling back to `cli-arg-<id>` |
+| Possible value help | `cli-<path>-arg-<id>-value-<value>` |
+| clap errors | `cli-error-<ErrorKind in kebab-case>` |
 
-## MCP(feature `rmcp`)
+`<path>` is the chain of subcommand names joined with `-` (`cli-db-migrate-about`).
+
+## MCP server (feature `rmcp`)
 
 ```rust
 let tool_router = lingokit::rmcp::localize_if_enabled(Self::tool_router(), &loc);
 let instructions = lingokit::rmcp::instructions(&loc, "English instructions");
 ```
 
-- ツールの説明・スキーマは既定では英語のまま。`<PREFIX>_MCP_LOCALIZE_SCHEMA=true` で翻訳する
-- 結果やエラーの文言は `loc.msg(...)` / `loc.error(...)` で常に翻訳できる
+- Tool descriptions and schemas stay as written in the source unless
+  `<PREFIX>_MCP_LOCALIZE_SCHEMA=true` is set.
+- Tool results and errors can always be localized with `loc.msg(..)` / `loc.error(..)`.
 
-| 対象 | キー |
+| Target | Key |
 |---|---|
-| ツールの説明 | `mcp-tool-<name>`(`.title` 属性でタイトル) |
-| パラメータ | `mcp-tool-<name>-param-<prop>` |
-| instructions | `mcp-instructions` |
+| Tool description | `mcp-tool-<name>` (`.title` attribute for the title) |
+| Parameter | `mcp-tool-<name>-param-<prop>` |
+| Instructions | `mcp-instructions` |
 
-## 言語の決まり方
+## Locale
 
-`--lang`(CLI のみ)→ `<PREFIX>_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` → 既定言語
+`--lang` (CLI only) → `<PREFIX>_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG` → default locale
 
-`<PREFIX>` は既定でパッケージ名の大文字(`my-tool-core` → `MY_TOOL_CORE`)。`Config::env_prefix` で変更できます。
+`<PREFIX>` defaults to the package name in upper case (`my-tool-core` → `MY_TOOL_CORE`) and can
+be set with `Config::env_prefix`.
 
-## テスト
+## Tests
 
 ```rust
 #[test]
 fn i18n_keys() {
-    lingokit::clap::assert_keys::<Cli>(&LOCALES);                    // CLI の全キー
-    lingokit::rmcp::assert_keys(&Server::tool_router(), &LOCALES);   // MCP の全キー
+    lingokit::clap::assert_keys::<Cli>(&LOCALES);                    // every CLI key
+    lingokit::rmcp::assert_keys(&Server::tool_router(), &LOCALES);   // every MCP key
 }
 ```
 
-既定言語にキーがなければ失敗し、追加すべきキーの一覧を表示します。他の言語の欠落は警告のみです。
+The test fails with the list of keys to add when the default locale lacks one.
 
-## ビルド時チェック([ftl-check](https://github.com/lovelygenerator/ftl-check))
+## Build-time checks ([ftl-check](https://github.com/lovelygenerator/ftl-check))
 
-`lingokit-build` はビルドのたびに ftl-check の `check` を実行します。
+`lingokit-build` runs ftl-check's `check` on every build.
 
-| 診断 | 結果 |
+| Diagnostics | Result |
 |---|---|
-| 重大度 error(構文エラー・翻訳の欠落 E201・引数の不一致 E211/E212・複数形 E302 など) | ビルド失敗 |
-| 重大度 warn(未翻訳の疑い W502・余分なキー W202 など) | `cargo:warning` |
+| Severity `error` (syntax errors, missing translations E201, mismatched variables E211/E212, plural categories E302, ...) | The build fails |
+| Severity `warn` (possibly untranslated W502, extra keys W202, ...) | Cargo warnings |
 
-- `ftl-check.toml` があれば(`CARGO_MANIFEST_DIR` から上位へ探す)`[rules]` / `[allow]` などに従います
-- `path` と `base` は `Config::new(..)` / `default_lang(..)` の値で上書きするので、コード生成と同じファイルを検査します
-- 同じ設定で CLI の `ftl-check` を実行すると、ビルドと同じ結果になります(`ftl-check explain E201` でコードの説明)
-- 表示言語は `FTL_CHECK_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG`(英語・日本語)
+- An `ftl-check.toml`, searched for from `CARGO_MANIFEST_DIR` upward, configures the checks
+  (`[rules]`, `[allow]`, ...).
+- Its `path` and `base` are overridden by `Config::new(..)` / `default_lang(..)`, so the checked
+  files are the ones the code is generated from.
+- Running the `ftl-check` command with the same config gives the same result
+  (`ftl-check explain E201` describes a code).
+- Diagnostics are shown in English or Japanese: `FTL_CHECK_LANG` → `LC_ALL` → `LC_MESSAGES` → `LANG`.
 
-## 注意
+## Notes
 
-- rmcp は `ToolRouter.map`(pub)に依存しているため `~3.10` に固定しています
-- MCP のスキーマ翻訳はトップレベルの `properties` だけが対象です
-- `fluent-langneg` は fluent-bundle 0.16 に合わせて 0.13 を使っています
-- ftl-check のライブラリ API は 0.x の間不安定なため `=0.1.0` で固定しています。MSRV は ftl-check に合わせて 1.88 です
+- The `rmcp` feature uses the public `ToolRouter::map` of rmcp, so rmcp is pinned to `~3.10`.
+- Only the top-level `properties` of MCP input schemas are localized.
+- The library API of ftl-check is unstable during 0.x, so it is pinned to `=0.1.0`.
 
-## ライセンス
+## Minimum supported Rust version
 
-[MIT](LICENSE-MIT) または [Apache-2.0](LICENSE-APACHE) のいずれかを選択できます。
+1.88
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT) at your option.

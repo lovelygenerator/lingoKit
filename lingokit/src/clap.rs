@@ -1,16 +1,20 @@
-//! clap の CLI を FTL のキー規約に従って翻訳する(feature `clap`)。
+//! Localizing [clap](https://docs.rs/clap) CLIs (feature `clap`).
 //!
-//! | 対象 | キー |
+//! Texts are looked up by these keys:
+//!
+//! | Target | Key |
 //! |---|---|
-//! | コマンドの about | `cli-about` / `cli-<path>-about`(`-long-about` も可) |
-//! | 引数の help | `cli-<path>-arg-<id>`(`-long` も可)。なければ `cli-arg-<id>` |
-//! | 候補値の説明 | `cli-<path>-arg-<id>-value-<value>` |
-//! | 見出し | `cli-heading-{usage,arguments,options,commands}` |
-//! | ラベル | `cli-label-{possible-values,default}` |
-//! | clap のエラー | `cli-error-<kind>`(引数: `$arg` `$value` `$valid_values` `$suggested` `$subcommand`) |
+//! | Command about | `cli-about` / `cli-<path>-about` (also `-long-about`) |
+//! | Argument help | `cli-<path>-arg-<id>` (also `-long`), falling back to `cli-arg-<id>` |
+//! | Possible value help | `cli-<path>-arg-<id>-value-<value>` |
+//! | Help headings | `cli-heading-{usage,arguments,options,commands}` |
+//! | Labels | `cli-label-{possible-values,default}` |
+//! | clap errors | `cli-error-<kind>` (variables: `$arg` `$value` `$valid_values` `$suggested` `$subcommand`) |
 //!
-//! `<path>` はサブコマンドの連鎖を `-` でつないだもの。キーがなければ元の(英語の)文言のまま。
-//! 見出し・ラベル・help/version/lang 引数・主なエラーは lingokit の組み込み(en/ja)があり、上書きもできる。
+//! `<path>` is the chain of subcommand names joined with `-`. When a key is missing, the text
+//! written in the source code is kept.
+//! Headings, labels, the help/version/lang arguments and the common errors have built-in
+//! translations (en, ja), which your FTL files can override.
 
 use std::ffi::OsString;
 use std::process::ExitCode;
@@ -20,15 +24,16 @@ use clap::{Arg, Command, CommandFactory, FromArgMatches};
 
 use crate::{FluentArgs, Locales, LocalizedError, Localizer, render_error_chain};
 
-/// argv を解析し、翻訳済みの `Localizer` と一緒に返す。
+/// Parses `std::env::args_os()` and returns the arguments together with the [`Localizer`].
 ///
-/// - `--lang` を事前に拾って言語を決める(`--lang` が未定義なら自動で追加する)
-/// - help・エラーを翻訳して表示し、必要なら終了する
+/// - The display language is taken from `--lang` before parsing. A global `--lang` argument is
+///   added when the command does not define one.
+/// - Help and errors are printed localized, and the process exits when clap would exit.
 pub fn parse<C: CommandFactory + FromArgMatches>(locales: &'static Locales) -> (C, Localizer) {
     parse_from(locales, std::env::args_os())
 }
 
-/// [`parse`] の引数指定版(テスト用)。
+/// [`parse`] with explicit arguments.
 pub fn parse_from<C, I, T>(locales: &'static Locales, args: I) -> (C, Localizer)
 where
     C: CommandFactory + FromArgMatches,
@@ -43,7 +48,7 @@ where
     (c, loc)
 }
 
-/// 翻訳済みの `Command` を作る(`--lang` が未定義なら追加する)。
+/// Builds the localized [`Command`] of `C`, adding `--lang` when it is not defined.
 pub fn command<C: CommandFactory>(loc: &Localizer) -> Command {
     localize_command(with_lang_arg(C::command()), loc)
 }
@@ -61,13 +66,13 @@ fn with_lang_arg(cmd: Command) -> Command {
     )
 }
 
-/// エラーを「エラー: メッセージ: 原因」の形で stderr に出し、失敗の終了コードを返す。
+/// Prints `<error label>: <message>: <causes>` to stderr and returns [`ExitCode::FAILURE`].
 pub fn report(loc: &Localizer, e: &dyn LocalizedError) -> ExitCode {
     eprintln!("{}: {}", loc.fmt("cli-error-label", None), render_error_chain(loc, e));
     ExitCode::FAILURE
 }
 
-/// `Result` をそのまま終了コードにする。エラーなら [`report`] する。
+/// Turns a `Result` into an exit code, [`report`]ing the error if there is one.
 pub fn exit_code<E: LocalizedError>(loc: &Localizer, r: Result<(), E>) -> ExitCode {
     match r {
         Ok(()) => ExitCode::SUCCESS,
@@ -75,7 +80,12 @@ pub fn exit_code<E: LocalizedError>(loc: &Localizer, r: Result<(), E>) -> ExitCo
     }
 }
 
-/// CLI の全コマンド・引数・候補値に対応するキーが既定言語にあるかを検査する(テスト用)。
+/// Asserts that the default locale has a key for every command, argument and possible value
+/// of `C`. Intended for tests.
+///
+/// # Panics
+///
+/// When keys are missing, with the list of keys to add.
 pub fn assert_keys<C: CommandFactory>(locales: &'static Locales) {
     crate::testing::assert_required_keys(locales, &required_keys(&with_lang_arg(C::command())));
 }
@@ -90,7 +100,10 @@ struct Ctx<'a> {
     l_default: String,
 }
 
-/// コマンドツリー全体を翻訳する。ビルド済み(help/version 引数や help サブコマンドが生成済み)の状態で書き換える。
+/// Localizes a whole command tree.
+///
+/// The command is built first, so that the generated help/version arguments and the `help`
+/// subcommand are localized as well.
 pub fn localize_command(mut cmd: Command, loc: &Localizer) -> Command {
     cmd.build();
     let styles = cmd.get_styles();
@@ -140,14 +153,14 @@ fn walk(mut cmd: Command, path: &str, ctx: &Ctx) -> Command {
 
     let subs: Vec<String> = cmd.get_subcommands().map(|s| s.get_name().to_string()).collect();
     for name in subs {
-        // 自動生成の `help` サブコマンドの子(`help count` 用)は、本体のサブコマンドと同じキーを使う
+        // The children of the generated `help` subcommand (`help <sub>`) use the keys of the real subcommands
         let sub_path = if path.is_empty() || path == "help" { name.clone() } else { format!("{path}-{name}") };
         cmd = cmd.mut_subcommand(&name, |s| walk(s, &sub_path, ctx));
     }
     cmd
 }
 
-/// 引数のキー: `<prefix>-arg-<id><suffix>`、なければ `cli-arg-<id><suffix>`(グローバル引数・help/version 用)
+/// `<prefix>-arg-<id><suffix>`, falling back to `cli-arg-<id><suffix>` (global arguments, help/version)
 fn arg_text(loc: &Localizer, p: &str, id: &str, suffix: &str) -> Option<String> {
     loc.get(&format!("{p}-arg-{id}{suffix}"), None).or_else(|| loc.get(&format!("cli-arg-{id}{suffix}"), None))
 }
@@ -157,7 +170,7 @@ fn localize_arg(mut a: Arg, p: &str, ctx: &Ctx) -> Arg {
     let id = a.get_id().to_string();
 
     let help = arg_text(loc, p, &id, "").or_else(|| a.get_help().map(|s| s.to_string()));
-    // 短い help だけ翻訳されている場合は、英語の long help を使わず短い help を使う(言語が混ざらないように)
+    // When only the short help is translated, use it as the long help too, so that languages do not mix
     let long = arg_text(loc, p, &id, "-long").or_else(|| match arg_text(loc, p, &id, "") {
         Some(_) => None,
         None => a.get_long_help().map(|s| s.to_string()),
@@ -165,7 +178,7 @@ fn localize_arg(mut a: Arg, p: &str, ctx: &Ctx) -> Arg {
     let mut short_extra = String::new();
     let mut long_extra = String::new();
 
-    // 候補値(value_enum など): clap の表示を隠し、翻訳した一覧を help に足す
+    // Possible values (value_enum etc.): hide clap's list and append a localized one
     let pvs: Vec<_> = a.get_possible_values().into_iter().filter(|v| !v.is_hide_set()).collect();
     if !pvs.is_empty() && !a.is_hide_possible_values_set() {
         let names: Vec<&str> = pvs.iter().map(|v| v.get_name()).collect();
@@ -182,7 +195,7 @@ fn localize_arg(mut a: Arg, p: &str, ctx: &Ctx) -> Arg {
         a = a.hide_possible_values(true);
     }
 
-    // 既定値の「[default: x]」もラベルを翻訳する
+    // Localize the label of `[default: x]` as well
     let defaults: Vec<String> = a.get_default_values().iter().map(|v| v.to_string_lossy().into_owned()).collect();
     if !defaults.is_empty() && !a.is_hide_default_value_set() && a.get_action().takes_values() {
         let d = format!(" [{}: {}]", ctx.l_default, defaults.join(", "));
@@ -208,7 +221,7 @@ fn localize_arg(mut a: Arg, p: &str, ctx: &Ctx) -> Arg {
     a
 }
 
-/// clap のエラーを翻訳して表示し、終了する。対応するキーがなければ clap の英語の表示のまま。
+/// Prints a clap error localized and exits. Errors without a `cli-error-<kind>` key are printed by clap.
 pub fn exit_with_clap_error(e: clap::Error, loc: &Localizer) -> ! {
     use ErrorKind::*;
     if matches!(e.kind(), DisplayHelp | DisplayVersion | DisplayHelpOnMissingArgumentOrSubcommand) {
@@ -261,7 +274,7 @@ fn kebab(s: &str) -> String {
     o
 }
 
-/// 必須キーの一覧(テスト用)。各要素は「どれか1つがあればよい」候補。
+/// The keys a command needs. Each element lists alternatives, one of which must exist.
 pub fn required_keys(cmd: &Command) -> Vec<Vec<String>> {
     let mut cmd = cmd.clone();
     cmd.build();
@@ -282,7 +295,7 @@ fn collect(cmd: &Command, path: &str, out: &mut Vec<Vec<String>>) {
         }
     }
     if path == "help" {
-        return; // 子は本体のサブコマンドのキーを流用する
+        return; // its children reuse the keys of the real subcommands
     }
     for s in cmd.get_subcommands() {
         let sp = if path.is_empty() { s.get_name().to_string() } else { format!("{path}-{}", s.get_name()) };
